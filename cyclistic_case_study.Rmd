@@ -1,0 +1,228 @@
+---
+title: 'Google Data Analytics Capstone Project: Cyclistic Case Study'
+author: "Kenen Corea"
+date: "2023-04-21"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = '/Users/kenencorea/Desktop/Data/Cyclistic_Case_Study/Cyclistic_Raw_CSVs')
+```
+
+## Purpose
+
+The following is a comprehensive write-up detailing the steps I took for the analysis of the "Cyclistic" Case Study of one of the Google Data Analytics Capstone Projects. Note: "Cyclistic" is a fictional company. The data sourced for this project was made available by Motivate International Inc.
+
+
+
+# Setup
+### Loading in packages
+
+The only packages needed for this project are tidyverse and janitor (we also need to load in the magrittr package separately in order for it to work properly, despite it already being part of the tidyverse package).
+
+```{r libraries}
+library(tidyverse)
+library(magrittr)
+library(janitor)
+```
+
+
+### Loading in each month's dataset for the past twelve months of data (April 2022 - March 2023)
+
+Each individual month has its own separate ZIP file of .csv data contained within it. We will read in each file individually and assign it to its own dataframe named accordingly.
+
+```{r}
+apr_2022 <- read_csv("2022_04-divvy-tripdata.csv")
+may_2022 <- read_csv("2022_05-divvy-tripdata.csv")
+jun_2022 <- read_csv("2022_06-divvy-tripdata.csv")
+jul_2022 <- read_csv("2022_07-divvy-tripdata.csv")
+aug_2022 <- read_csv("2022_08-divvy-tripdata.csv")
+sep_2022 <- read_csv("2022_09-divvy-publictripdata.csv")
+oct_2022 <- read_csv("2022_10-divvy-tripdata.csv")
+nov_2022 <- read_csv("2022_11-divvy-tripdata.csv")
+dec_2022 <- read_csv("2022_12-divvy-tripdata.csv")
+jan_2023 <- read_csv("2023_01-divvy-tripdata.csv")
+feb_2023 <- read_csv("2023_02-divvy-tripdata.csv")
+mar_2023 <- read_csv("2023_03-divvy-tripdata.csv")
+```
+
+
+### Merging data
+
+Since all of the tables have the same exact variables/columns, we can vertically merge each table onto one another using the `rbind()` function, creating a new dataframe for the entire year named `total_year_merged`.
+
+```{r}
+total_year_merged <- rbind(apr_2022, may_2022, jun_2022, jul_2022, aug_2022, sep_2022, 
+                           oct_2022, nov_2022, dec_2022, jan_2023, feb_2023, mar_2023)
+```
+
+
+### Previewing the data
+
+To get an idea/preview of the variables that we will be working with and examining in our dataset, we can run the `head()`, `str()`, and `colnames()` functions on the table.
+
+```{r}
+head(total_year_merged)
+str(total_year_merged)
+colnames(total_year_merged)
+```
+
+
+
+# Cleaning & Transformation
+Now that we have a singular dataframe to work with, we can clean and transform it to suit our needs for the analysis later down the line.
+
+
+### Cleaning column names
+
+We will run the `clean_names()` function from the `janitor` package for good measure.
+
+```{r}
+total_year_merged %<>% clean_names()
+```
+
+
+### Running tests
+
+First, we will run a simple algorithm to confirm that there are no duplicated instances/observations of the `ride_id` variable. We are looking for zero results to show when this line is run (*"A tibble: 0 x 2"*).
+
+```{r}
+total_year_merged %>% count(ride_id) %>% filter(n>1)
+```
+
+Test passed! We now know that there are no duplicate `ride_id` (every observation/row is unique).
+
+
+We will now check to make sure that some key variables that will be of importance to us all have the same name/spelling convention for every observation. For the `member_casual` column, we should only see two different attributes: casual users and members. For the `rideable_type` column, there should only be 3 bike options.
+
+```{r}
+total_year_merged %>% distinct(member_casual)
+total_year_merged %>% distinct(rideable_type)
+```
+
+Test passed!
+
+
+Finally, we will run a test to see if any key variables contain N/A values. in this case, we want every observation to be *"FALSE"*, any *"TRUE"* values signify N/A instances. (Note: we do not need to perform this on any of the time variables since we will be taking averages using the `mean()` function and using the remove N/A argument later down the line)
+
+```{r}
+total_year_merged %>% count(is.na(ride_id))
+total_year_merged %>% count(is.na(member_casual))
+```
+
+Test passed!
+
+
+### Creating Columns
+
+Now, we create a new column named `ride_length` that calculates the difference between the start and end times of each trip, converting it to HH:MM:SS format, then creating another new column named `ride_length_minutes` which lists the same time but only in minutes (this will be useful for our charts later).
+
+```{r}
+total_year_merged %<>% mutate(ride_length = (ended_at - started_at)) %>%
+                       mutate(ride_length = hms::as_hms(ride_length)) %>%
+                       mutate(ride_length_minutes = minute(ride_length))
+```
+
+
+Additionally, we will create a new column named `day_of_week` that uses the `wday()` function to calculate the day of the week of any particular day. We will use this function on the `started_at` column so that we know which day of the week every ride occurred on.
+
+```{r}
+total_year_merged %<>% mutate(day_of_week = wday(started_at))
+```
+
+
+Editing the `member_casual` column so that the outputs start with a capitalized letter for nicer graph labeling (purely aesthetic).
+
+```{r}
+total_year_merged %<>% mutate(member_casual = ifelse(member_casual == "casual", "Casual", "Member"))
+```
+
+
+
+# Analysis
+
+### Creating the first bar plot
+
+The first bar chart will simply be plotting the average ride time per customer group. In order for the ggplot graph to load more efficiently/faster, we will first create a small summary table named `avg_ride_time_per_group` with the only relevant variables we need: the customer type and the average ride time. This table with then be fed into the `ggplot()` function after for faster loading.
+
+```{r}
+avg_ride_time_by_group <- total_year_merged %>% 
+                          group_by(member_casual) %>% 
+                          summarize(mean_ride_length = mean(ride_length_minutes, na.rm = T))
+```
+
+Now to create the graph! Nothing too fancy going on here, just adding in the appropriate aesthetics + labels and adjusting the appearance to look as clean as possible.
+
+```{r}
+avg_ride_time_by_group %>% ggplot(aes(x = member_casual, y = mean_ride_length, fill = member_casual)) +
+                           geom_bar(stat = "identity", width = 0.5) +
+                           ylim(0,17) +
+                           scale_fill_manual(values = c("#212121", "#0071bc")) +
+                           labs(title = "Average Ride Time by Customer Type",
+                                subtitle = "Casual Customers vs Members",
+                                x = "Customer Type",
+                                y = "Average Ride Length (Minutes)",
+                                fill = "") +
+                           theme_minimal() +
+                           geom_text(aes(label = round(mean_ride_length, digits = 2)), vjust = -1, size = 4.5)
+```
+
+
+### Creating the second bar plot
+
+Our second bar graph plots the frequency of rides per weekday by customer type. Before we begin to create the chart, we must edit the `day_of_week` column further. When we initially created this column, the `wday()` function gave us the day of the week of each ride by numerical values (1 = Sunday, 7 = Saturday). If we were to simply use this column as-is for the x-axis, the order of the numbers would be lost (and hence the weekday order would be mismatched). Additionally, it would also display the numbers only on the x-axis instead of the actual weekdays.
+
+To solve this, we will first create a new column named `day_of_week_abr` on our original `total_year_merged` dataframe which converts each number to its corresponding day of week.
+
+```{r}
+total_year_merged %<>% mutate(day_of_week_abr = ifelse(day_of_week == 1, "Sun", 
+                                                  ifelse(day_of_week == 2, "Mon", 
+                                                    ifelse(day_of_week == 3, "Tue", 
+                                                      ifelse(day_of_week == 4, "Wed", 
+                                                        ifelse(day_of_week == 5, "Thu", 
+                                                          ifelse(day_of_week == 6, "Fri", 
+                                                            ifelse(day_of_week == 7, "Sat", 0))))))))
+```
+
+After that, we need to convert this new column to a factor and specify the levels argument in order to manually control the order of the bars (first bar = Monday, last bar = Sunday).
+
+```{r}
+total_year_merged$day_of_week_abr <- factor(total_year_merged$day_of_week_abr,
+                                            levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
+```
+
+Now we can finally make our second graph! Once again, nothing too fancy here. The only major difference between this graph and the last one (besides the data/variables we are using, obviously) is that we are facet wrapping on the `member_casual` variable to separate the graph by customer type.
+
+```{r}
+total_year_merged %>% ggplot(aes(x = day_of_week_abr, fill = member_casual)) +
+                                    geom_bar() +
+                                    scale_y_continuous(labels = scales::comma) +
+                                    scale_fill_manual(values = c("#212121", "#0071bc")) +
+                                    labs(title = "Total Rides by Weekday",
+                                         subtitle = "Casual Customers vs Members",
+                                         x = "Day of Week",
+                                         y = "Rides",
+                                         fill = "") +
+                                    facet_wrap(~member_casual) + 
+                                    theme_minimal()
+```
+
+And that about wraps it up! (no pun intended)
+
+## The End
+
+
+
+
+
+
+
+
+
+
+
+
+
+
