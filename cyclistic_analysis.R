@@ -113,13 +113,13 @@ avg_ride_time_by_group %>% ggplot(aes(x = member_casual, y = mean_ride_length, f
 
 #Creating a new column that inputs the numerical day of week and outputs the corresponding abbreviated
 #day of the week for easier graph labeling (purely aesthetic)
-total_year_merged %<>% mutate(day_of_week_abr = ifelse(day_of_week == 1, "Sun", 
-                                                  ifelse(day_of_week == 2, "Mon", 
-                                                    ifelse(day_of_week == 3, "Tue", 
-                                                      ifelse(day_of_week == 4, "Wed", 
-                                                        ifelse(day_of_week == 5, "Thu", 
-                                                          ifelse(day_of_week == 6, "Fri", 
-                                                            ifelse(day_of_week == 7, "Sat", 0))))))))
+total_year_merged %<>% mutate(day_of_week_abr = case_when(day_of_week == 1 ~ "Sun",
+                                                          day_of_week == 2 ~ "Mon",
+                                                          day_of_week == 3 ~ "Tue",
+                                                          day_of_week == 4 ~ "Wed",
+                                                          day_of_week == 5 ~ "Thu",
+                                                          day_of_week == 6 ~ "Fri",
+                                                          day_of_week == 7 ~ "Sat"))
 
 
 #Converting the new abbreviated day of week column into a factor and specifying the levels argument in order to
